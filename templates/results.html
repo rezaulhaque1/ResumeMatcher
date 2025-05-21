@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Results - Resume Analyzer</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .chart-container {
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .profile-info {
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .profile-info li {
+            margin: 10px 0;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border: 1px solid #ddd;
+        }
+        th {
+            background-color: #3498db;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f2f2f2;
+        }
+        .match-score {
+            font-weight: bold;
+            color: #27ae60;
+        }
+        .missing-skills {
+            color: #e74c3c;
+        }
+        .back-button {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #3498db;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+        .back-button:hover {
+            background-color: #2980b9;
+        }
+        .skill-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .skill-tag {
+            background-color: #3498db;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+        .missing-skill-tag {
+            background-color: #e74c3c;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Profile Analysis Dashboard</h1>
+        <div class="profile-info">
+            <ul>
+                <li><b>Name:</b> {{ profile.name }}</li>
+                <li><b>Email:</b> {{ profile.email }}</li>
+                <li><b>Phone:</b> {{ profile.phone }}</li>
+                <li>
+                    <b>Skills:</b>
+                    <div class="skill-tags">
+                        {% for skill in profile.skills %}
+                        <span class="skill-tag">{{ skill }}</span>
+                        {% endfor %}
+                    </div>
+                </li>
+                <li><b>Education:</b> {{ profile.education|join('; ') }}</li>
+                <li><b>Experience:</b> {{ profile.experience|join(', ') }}</li>
+            </ul>
+        </div>
+
+        <div class="dashboard">
+            <div class="chart-container">
+                <h2>Job Match Distribution</h2>
+                <canvas id="matchChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h2>Skills Analysis</h2>
+                <canvas id="skillsChart"></canvas>
+            </div>
+        </div>
+
+        <h2>Job Matches</h2>
+        <table>
+            <tr>
+                <th>Job Title</th>
+                <th>Company</th>
+                <th>Skills Required</th>
+                <th>Match %</th>
+                <th>Missing Skills</th>
+            </tr>
+            {% for i in range(jobs|length) %}
+            <tr>
+                <td>{{ jobs[i]['Title'] }}</td>
+                <td>{{ jobs[i]['Company'] }}</td>
+                <td>
+                    <div class="skill-tags">
+                        {% if jobs[i]['Skills'] is string %}
+                            {% for skill in jobs[i]['Skills'].split(',') %}
+                            <span class="skill-tag">{{ skill.strip() }}</span>
+                            {% endfor %}
+                        {% else %}
+                            <span class="skill-tag">{{ jobs[i]['Skills'] }}</span>
+                        {% endif %}
+                    </div>
+                </td>
+                <td class="match-score">{{ scores[i] }}%</td>
+                <td>
+                    <div class="skill-tags">
+                        {% for skill in gaps[i] %}
+                        <span class="missing-skill-tag">{{ skill }}</span>
+                        {% endfor %}
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+        <a href="/" class="back-button">Try another resume</a>
+    </div>
+
+    <script>
+        // Job Match Distribution Chart
+        const matchCtx = document.getElementById('matchChart').getContext('2d');
+        new Chart(matchCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ jobs|map(attribute='Title')|list|tojson }},
+                datasets: [{
+                    label: 'Match Percentage',
+                    data: {{ scores|tojson }},
+                    backgroundColor: '#3498db',
+                    borderColor: '#2980b9',
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100
+                    }
+                }
+            }
+        });
+
+        // Skills Analysis Chart
+        const skillsCtx = document.getElementById('skillsChart').getContext('2d');
+        const allSkills = new Set();
+        const jobSkills = {{ jobs|map(attribute='Skills')|list|tojson }};
+        
+        jobSkills.forEach(skills => {
+            if (typeof skills === 'string') {
+                skills.split(',').forEach(skill => allSkills.add(skill.trim()));
+            } else {
+                allSkills.add(skills.toString());
+            }
+        });
+        
+        const skillCounts = Array.from(allSkills).map(skill => {
+            return {
+                skill: skill,
+                count: jobSkills.filter(skills => {
+                    if (typeof skills === 'string') {
+                        return skills.split(',').map(s => s.trim()).includes(skill);
+                    }
+                    return skills.toString() === skill;
+                }).length
+            };
+        });
+
+        new Chart(skillsCtx, {
+            type: 'pie',
+            data: {
+                labels: skillCounts.map(item => item.skill),
+                datasets: [{
+                    data: skillCounts.map(item => item.count),
+                    backgroundColor: [
+                        '#3498db', '#2ecc71', '#e74c3c', '#f1c40f', '#9b59b6',
+                        '#1abc9c', '#d35400', '#34495e', '#16a085', '#c0392b'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'right'
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html> 
